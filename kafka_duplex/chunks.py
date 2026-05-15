@@ -15,10 +15,10 @@ from .schema import (
 
 Token: TypeAlias = int | str
 
-USER_SPEECH_TOKENS_PER_CHUNK = 5
+USER_SPEECH_TOKENS_PER_CHUNK = 10
 AGENT_TEXT_TOKENS_PER_SPEAK_CHUNK = 2
-AGENT_SPEECH_TOKENS_PER_CHUNK = 5
-CANONICAL_CHUNK_SIZE = 14
+AGENT_SPEECH_TOKENS_PER_CHUNK = 10
+CANONICAL_CHUNK_SIZE = 24
 
 _ACTION_FROM_TOKEN = {value: key for key, value in ACTION_TOKEN_ORDER.items()}
 
@@ -121,14 +121,18 @@ def parse_chunk(tokens: list[Token]) -> DuplexChunkRecord:
     if tokens[0] != SPECIAL_TOKENS["CHUNK"]:
         raise ValueError("Chunk must start with the [CHUNK] token.")
 
-    user_tokens = _expect_int_tokens(tokens[1:6], name="user speech")
-    action_token = tokens[6]
+    user_end = 1 + USER_SPEECH_TOKENS_PER_CHUNK
+    action_index = user_end
+    payload_start = action_index + 1
+
+    user_tokens = _expect_int_tokens(tokens[1:user_end], name="user speech")
+    action_token = tokens[action_index]
     try:
         action = _ACTION_FROM_TOKEN[action_token]
     except KeyError as exc:
         raise ValueError(f"Unknown action token: {action_token!r}") from exc
 
-    payload = tokens[7:]
+    payload = tokens[payload_start:]
     if action == DuplexAction.LISTEN:
         _validate_listen_payload(payload)
         return build_listen_chunk(user_tokens)

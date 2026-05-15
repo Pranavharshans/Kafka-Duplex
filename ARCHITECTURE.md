@@ -32,7 +32,7 @@ This is intentionally a prototype architecture. The goal is to validate whether 
 USER AUDIO IN (mic)                                                     AGENT AUDIO OUT (speaker)
      |                                                                                 ^
      v                                                                                 |
-+----------------+     5 tokens / 200ms     +---------------------------+     5 tokens / 200ms     +----------------+
++----------------+    10 tokens / 200ms     +---------------------------+    10 tokens / 200ms     +----------------+
 | CosyVoice      |------------------------->| SmolLM2-360M              |-------------------------->| CosyVoice      |
 | Encoder        |                          | + 3-way Action Head       |                           | Decoder        |
 | (frozen)       |                          | + Action Token Injection  |                           | (frozen)       |
@@ -44,7 +44,7 @@ USER AUDIO IN (mic)                                                     AGENT AU
 
 Per 200ms chunk:
 
-1. Encode user audio into 5 speech tokens
+1. Encode user audio into 10 speech tokens
 2. Run the LM over the new chunk context
 3. Predict a chunk-level action after the user tokens are consumed
 4. Inject the predicted action token into the sequence
@@ -116,20 +116,25 @@ Notes:
 
 ### Stage 3 — Full-Duplex (200ms chunks)
 
+Measured codec note:
+
+- On the tested `CosyVoice-300M` speech tokenizer path, the real token rate is **10 speech tokens per 200ms**
+- Earlier `5 tokens / 200ms` assumptions were incorrect for this runtime
+
 Canonical chunk layout:
 
 ```text
-[CHUNK] usr_sp1 usr_sp2 usr_sp3 usr_sp4 usr_sp5 [ACTION] agt_txt1 agt_txt2 agt_sp1 agt_sp2 agt_sp3 agt_sp4 agt_sp5
+[CHUNK] usr_sp1 usr_sp2 usr_sp3 usr_sp4 usr_sp5 usr_sp6 usr_sp7 usr_sp8 usr_sp9 usr_sp10 [ACTION] agt_txt1 agt_txt2 agt_sp1 agt_sp2 agt_sp3 agt_sp4 agt_sp5 agt_sp6 agt_sp7 agt_sp8 agt_sp9 agt_sp10
 ```
 
-Total: `14 tokens / chunk`
+Total: `24 tokens / chunk`
 
 Action-specific behavior:
 
 #### LISTEN
 
 ```text
-[CHUNK] usr1 usr2 usr3 usr4 usr5 [LISTEN] <sil_txt> <sil_txt> <sil_sp> <sil_sp> <sil_sp> <sil_sp> <sil_sp>
+[CHUNK] usr1 usr2 usr3 usr4 usr5 usr6 usr7 usr8 usr9 usr10 [LISTEN] <sil_txt> <sil_txt> <sil_sp> <sil_sp> <sil_sp> <sil_sp> <sil_sp> <sil_sp> <sil_sp> <sil_sp> <sil_sp> <sil_sp>
 ```
 
 - No generation after the action token
@@ -138,7 +143,7 @@ Action-specific behavior:
 #### SPEAK
 
 ```text
-[CHUNK] usr1 usr2 usr3 usr4 usr5 [SPEAK] txt1 txt2 sp1 sp2 sp3 sp4 sp5
+[CHUNK] usr1 usr2 usr3 usr4 usr5 usr6 usr7 usr8 usr9 usr10 [SPEAK] txt1 txt2 sp1 sp2 sp3 sp4 sp5 sp6 sp7 sp8 sp9 sp10
 ```
 
 - Full generation path
@@ -147,7 +152,7 @@ Action-specific behavior:
 #### BACKCHANNEL
 
 ```text
-[CHUNK] usr1 usr2 usr3 usr4 usr5 [BACKCHANNEL] <sil_txt> <sil_txt> bch1 bch2 bch3 bch4 bch5
+[CHUNK] usr1 usr2 usr3 usr4 usr5 usr6 usr7 usr8 usr9 usr10 [BACKCHANNEL] <sil_txt> <sil_txt> bch1 bch2 bch3 bch4 bch5 bch6 bch7 bch8 bch9 bch10
 ```
 
 - No text tokens
@@ -164,8 +169,8 @@ interrupt_event = prev_action == LISTEN and cur_action == SPEAK and user_speakin
 
 ### Context window math
 
-- `8192 / 14 = 585` chunks
-- `585 x 200ms = 117 seconds` maximum rolling context
+- `8192 / 24 = 341` chunks
+- `341 x 200ms = 68.2 seconds` maximum rolling context
 
 ## 7. ACTION HEAD
 
@@ -180,7 +185,7 @@ classes = [LISTEN, SPEAK, BACKCHANNEL]
 
 Prediction point:
 
-- Input sequence up to: `[CHUNK] usr_sp1..5`
+- Input sequence up to: `[CHUNK] usr_sp1..10`
 - Read hidden state at the last user speech token position
 - Produce 3-way action logits
 
@@ -233,7 +238,7 @@ This keeps the action:
 | **Goal** | Learn chunk-level timing policy and chunk-conditioned generation |
 | **Tasks** | LISTEN vs SPEAK vs BACKCHANNEL |
 | **Data** | 15K chunked conversations (synthetic + augmented) |
-| **Format** | `[CHUNK] usr_sp5 [ACTION] agt_txt2 agt_sp5` |
+| **Format** | `[CHUNK] usr_sp10 [ACTION] agt_txt2 agt_sp10` |
 | **Init** | Stage 2 checkpoint |
 | **Batch** | 64 effective |
 | **Seq len** | 8192 |
@@ -277,13 +282,13 @@ Then tokenize audio with the CosyVoice encoder.
 ```python
 # 1. Take Stage 2 dialogues
 # 2. Chunk both sides into 200ms windows
-# 3. Encode each chunk into 5 speech tokens
+# 3. Encode each chunk into 10 speech tokens
 # 4. Label each chunk action:
 #       BACKCHANNEL if short overlapping acknowledgment
 #       SPEAK if agent speech is present
 #       LISTEN otherwise
 # 5. Derive yield/interrupt only for evaluation
-# 6. Serialize as [CHUNK] usr_sp5 [ACTION] agt_txt2 agt_sp5
+# 6. Serialize as [CHUNK] usr_sp10 [ACTION] agt_txt2 agt_sp10
 ```
 
 Chunk labeling skeleton:
@@ -312,16 +317,16 @@ Prototype assumption:
 
 ```text
 1. Capture 200ms of user audio
-2. Encode to 5 speech tokens
+2. Encode to 10 speech tokens
 3. Append [CHUNK] + user tokens
 4. Run LM forward and predict action
 5. Append action token
 6. If LISTEN:
        append deterministic silence tokens
    If SPEAK:
-       generate 2 text + 5 speech tokens
+       generate 2 text + 10 speech tokens
    If BACKCHANNEL:
-       generate 5 speech tokens only
+       generate 10 speech tokens only
 7. Decode speech tokens and play audio
 ```
 
@@ -330,7 +335,7 @@ Prototype assumption:
 ```python
 while True:
     user_audio = capture_200ms()
-    user_tokens = cosyvoice_encode(user_audio)              # -> 5 tokens
+    user_tokens = cosyvoice_encode(user_audio)              # -> 10 tokens
 
     context.extend([CHUNK] + user_tokens)
     h = model.forward_until_current_position(context)
@@ -342,7 +347,7 @@ while True:
 
     if action == SPEAK:
         context.append(SPEAK)
-        agent_tokens = model.generate(max_new_tokens=7)     # 2 txt + 5 speech
+        agent_tokens = model.generate(max_new_tokens=12)    # 2 txt + 10 speech
     else:
         context.append(BACKCHANNEL)
         agent_tokens = [SIL_TXT, SIL_TXT] + model.generate(max_new_tokens=5)
@@ -408,7 +413,7 @@ Prototype interpretation:
    The class is useful, but its heuristics may be messy in synthetic data.
 
 3. **Fixed per-chunk token budget may be too rigid**
-   `2 text + 5 speech` is a prototype assumption, not a proven optimum.
+   `2 text + 10 speech` is a prototype assumption, not a proven optimum.
 
 4. **Frozen speech stack may cap quality**
    If the codec or decoder behaves poorly in chunked streaming mode, the LM cannot fully rescue it.

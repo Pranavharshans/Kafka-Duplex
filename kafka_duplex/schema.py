@@ -47,8 +47,8 @@ class UserInputChunk:
     speech_tokens: list[int]
 
     def __post_init__(self) -> None:
-        if len(self.speech_tokens) != 5:
-            raise ValueError("UserInputChunk requires exactly 5 speech tokens.")
+        if len(self.speech_tokens) != 10:
+            raise ValueError("UserInputChunk requires exactly 10 speech tokens.")
 
 
 @dataclass(slots=True)
@@ -63,22 +63,22 @@ class AgentTargetChunk:
         if self.action == DuplexAction.LISTEN:
             if self.text_tokens:
                 raise ValueError("LISTEN chunks must not contain text tokens.")
-            if len(self.speech_tokens) not in (0, 5):
-                raise ValueError("LISTEN chunks must contain 0 or 5 silence speech tokens.")
+            if len(self.speech_tokens) not in (0, 10):
+                raise ValueError("LISTEN chunks must contain 0 or 10 silence speech tokens.")
             return
 
         if self.action == DuplexAction.SPEAK:
             if len(self.text_tokens) != 2:
                 raise ValueError("SPEAK chunks require exactly 2 text tokens.")
-            if len(self.speech_tokens) != 5:
-                raise ValueError("SPEAK chunks require exactly 5 speech tokens.")
+            if len(self.speech_tokens) != 10:
+                raise ValueError("SPEAK chunks require exactly 10 speech tokens.")
             return
 
         if self.action == DuplexAction.BACKCHANNEL:
             if self.text_tokens:
                 raise ValueError("BACKCHANNEL chunks must not contain text tokens.")
-            if len(self.speech_tokens) != 5:
-                raise ValueError("BACKCHANNEL chunks require exactly 5 speech tokens.")
+            if len(self.speech_tokens) != 10:
+                raise ValueError("BACKCHANNEL chunks require exactly 10 speech tokens.")
 
 
 @dataclass(slots=True)

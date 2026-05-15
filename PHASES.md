@@ -34,13 +34,14 @@ Outcome:
 
 Outcome:
 
-- `200ms audio -> 5 speech tokens -> decoded audio` works in practice
+- `200ms audio -> speech tokens -> decoded audio` works in practice
 - Codec rate, chunking assumptions, and latency are validated
 
 Current status:
 
 - Phase 2 scaffolding is implemented with `audio.py`, `codec.py`, offline validation, and prerecorded-audio runners
-- Real codec validation is still pending dependency install and adapter wiring
+- Real codec validation found that the tested `CosyVoice-300M` tokenizer path emits `10 speech tokens / 200ms`
+- Adapter wiring and docs must follow the measured token rate rather than the earlier `5 tokens / 200ms` assumption
 
 ## Phase 3: Minimal Model
 

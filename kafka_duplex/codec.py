@@ -9,7 +9,7 @@ from typing import Protocol
 from .audio import AudioBuffer, AudioChunk, DEFAULT_CHUNK_MS, DEFAULT_SAMPLE_RATE, generate_sine_wave
 
 
-TOKENS_PER_CHUNK = 5
+TOKENS_PER_CHUNK = 10
 
 
 @dataclass(slots=True)

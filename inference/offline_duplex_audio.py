@@ -108,11 +108,11 @@ class OfflineDuplexRunner:
     def _agent_payload(chunk_index: int, action: DuplexAction) -> tuple[list[int], list[int]]:
         if action == DuplexAction.BACKCHANNEL:
             base = 7000 + (chunk_index * 10)
-            return [], [base + offset for offset in range(5)]
+            return [], [base + offset for offset in range(10)]
 
         if action == DuplexAction.SPEAK:
             text_base = 1000 + (chunk_index * 2)
             speech_base = 9000 + (chunk_index * 10)
-            return [text_base, text_base + 1], [speech_base + offset for offset in range(5)]
+            return [text_base, text_base + 1], [speech_base + offset for offset in range(10)]
 
         return [], []

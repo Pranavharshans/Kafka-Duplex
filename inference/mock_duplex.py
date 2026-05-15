@@ -114,7 +114,7 @@ class MockDuplexRunner:
     def _fake_user_tokens(step: int, user_is_speaking: bool) -> list[int]:
         base = 100 if user_is_speaking else 10
         start = base + (step * 10)
-        return [start + idx for idx in range(5)]
+        return [start + idx for idx in range(10)]
 
     @staticmethod
     def _fake_agent_text_tokens(step: int) -> list[int]:
@@ -124,7 +124,7 @@ class MockDuplexRunner:
     @staticmethod
     def _fake_agent_speech_tokens(step: int, *, base: int) -> list[int]:
         start = base + (step * 10)
-        return [start + idx for idx in range(5)]
+        return [start + idx for idx in range(10)]
 
 
 def format_event(event: MockChunkEvent) -> str:
