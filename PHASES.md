@@ -19,8 +19,8 @@ Outcome:
 
 ## Phase 1: Fake End-to-End Loop
 
-- `[ ]` Build mocked 200ms duplex loop with fake speech tokens
-- `[ ]` Implement chunk assembler/parser utilities
+- `[x]` Build mocked 200ms duplex loop with fake speech tokens
+- `[x]` Implement chunk assembler/parser utilities
 
 Outcome:
 
