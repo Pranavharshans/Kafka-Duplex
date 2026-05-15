@@ -37,6 +37,11 @@ Outcome:
 - `200ms audio -> 5 speech tokens -> decoded audio` works in practice
 - Codec rate, chunking assumptions, and latency are validated
 
+Current status:
+
+- Phase 2 scaffolding is implemented with `audio.py`, `codec.py`, offline validation, and prerecorded-audio runners
+- Real codec validation is still pending dependency install and adapter wiring
+
 ## Phase 3: Minimal Model
 
 - `[ ]` Implement LM extension with expanded vocabulary and action head
