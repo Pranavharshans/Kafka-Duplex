@@ -41,7 +41,8 @@ Current status:
 
 - Phase 2 scaffolding is implemented with `audio.py`, `codec.py`, offline validation, and prerecorded-audio runners
 - Real codec validation found that the tested `CosyVoice-300M` tokenizer path emits `10 speech tokens / 200ms`
-- Adapter wiring and docs must follow the measured token rate rather than the earlier `5 tokens / 200ms` assumption
+- The repo now includes a real CosyVoice adapter shape, environment-based runtime config, and a dedicated token probe script
+- GPU validation is still required to confirm the in-repo adapter against the actual CosyVoice runtime and checkpoints
 
 ## Phase 3: Minimal Model
 

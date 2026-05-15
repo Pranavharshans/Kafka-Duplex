@@ -11,6 +11,7 @@ from .chunks import (
 )
 from .audio import AudioBuffer, AudioChunk, chunk_audio, concatenate, generate_sine_wave, load_wav_mono_pcm16, save_wav_mono_pcm16
 from .codec import CodecStats, CosyVoiceCodec, MockSpeechCodec, create_codec, timed_roundtrip
+from .codec import CosyVoiceRuntimeConfig, timed_encode
 from .schema import (
     ACTION_TOKEN_ORDER,
     SPECIAL_TOKENS,
@@ -29,6 +30,7 @@ __all__ = [
     "AudioChunk",
     "AgentTargetChunk",
     "CodecStats",
+    "CosyVoiceRuntimeConfig",
     "CosyVoiceCodec",
     "DuplexAction",
     "DuplexChunkRecord",
@@ -46,4 +48,5 @@ __all__ = [
     "parse_chunk",
     "save_wav_mono_pcm16",
     "timed_roundtrip",
+    "timed_encode",
 ]

@@ -8,3 +8,7 @@ Expected future contents:
 - dataset configs
 - training hyperparameter configs
 - inference runtime configs
+
+Current contents:
+
+- `runtime.example.env`: example environment variables for the optional real `CosyVoice` adapter
