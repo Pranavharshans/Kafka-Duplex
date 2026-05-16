@@ -12,4 +12,4 @@ Planned scope:
 Current Stage 1 additions:
 
 - `build_stage1_dataset.py`: builds `ASR` and `TTS` JSONL manifests from a LibriSpeech-style directory
-- `launch_stage1_training.py`: validates Stage 1 training config and manifest presence
+- `launch_stage1_training.py`: validates Stage 1 training config and manifest presence, and now fails fast on broken CUDA unless CPU fallback is explicitly allowed

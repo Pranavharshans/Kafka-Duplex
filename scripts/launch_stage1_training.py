@@ -24,6 +24,11 @@ def parse_args() -> argparse.Namespace:
         default="/workspace/kafka_duplex_runs/stage1",
         help="Directory for checkpoints, eval outputs, and TensorBoard event files.",
     )
+    parser.add_argument(
+        "--allow-cpu-fallback",
+        action="store_true",
+        help="Allow Stage 1 training to continue on CPU when CUDA is unavailable.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Only print parameters and dataset checks.")
     return parser.parse_args()
 
@@ -65,6 +70,7 @@ def main() -> None:
         Stage1RunConfig(
             config_path=str(config_path),
             output_dir=args.output_dir,
+            allow_cpu_fallback=args.allow_cpu_fallback,
         )
     )
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import as_completed
 import sys
 from pathlib import Path
 
@@ -18,7 +19,6 @@ from kafka_duplex.stage1 import (
     deterministic_split,
     speech_to_vocab_ids,
     text_to_mock_ids,
-    write_jsonl,
 )
 
 
@@ -119,6 +119,50 @@ def encode_utterance(utterance: LibriSpeechUtterance, codec_name: str) -> tuple[
     )
 
 
+def stream_partition(
+    items: list[LibriSpeechUtterance],
+    *,
+    codec_name: str,
+    output_path: Path,
+    num_workers: int,
+    progress_label: str,
+) -> int:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    total_items = len(items)
+    example_count = 0
+    completed = 0
+    progress_every = max(1, min(500, total_items // 20 or 1))
+
+    with output_path.open("w", encoding="utf-8") as handle:
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+            futures = [executor.submit(encode_utterance, item, codec_name) for item in items]
+            for future in as_completed(futures):
+                asr_example, tts_example = future.result()
+                handle.write(asr_example.to_json())
+                handle.write("\n")
+                handle.write(tts_example.to_json())
+                handle.write("\n")
+                example_count += 2
+                completed += 1
+
+                if completed % progress_every == 0 or completed == total_items:
+                    print(
+                        " ".join(
+                            [
+                                "stage1_progress",
+                                f"partition={progress_label}",
+                                f"utterances_done={completed}",
+                                f"utterances_total={total_items}",
+                                f"examples_written={example_count}",
+                                f"output_path={output_path}",
+                            ]
+                        ),
+                        flush=True,
+                    )
+
+    return example_count
+
+
 def main() -> None:
     args = parse_args()
     input_roots = [Path(value).expanduser().resolve() for value in args.input_root]
@@ -135,21 +179,22 @@ def main() -> None:
 
     train_utterances, val_utterances = deterministic_split(utterances, val_ratio=args.val_ratio, seed=args.seed)
 
-    def build_partition(items: list[LibriSpeechUtterance]) -> list[Stage1AlignmentExample]:
-        examples: list[Stage1AlignmentExample] = []
-        with ThreadPoolExecutor(max_workers=args.num_workers) as executor:
-            for asr_example, tts_example in executor.map(lambda item: encode_utterance(item, args.codec), items):
-                examples.append(asr_example)
-                examples.append(tts_example)
-        return examples
-
-    train_examples = build_partition(train_utterances)
-    val_examples = build_partition(val_utterances)
-
     train_path = output_root / "train.stage1.jsonl"
     val_path = output_root / "val.stage1.jsonl"
-    train_count = write_jsonl(train_path, train_examples)
-    val_count = write_jsonl(val_path, val_examples)
+    train_count = stream_partition(
+        train_utterances,
+        codec_name=args.codec,
+        output_path=train_path,
+        num_workers=args.num_workers,
+        progress_label="train",
+    )
+    val_count = stream_partition(
+        val_utterances,
+        codec_name=args.codec,
+        output_path=val_path,
+        num_workers=args.num_workers,
+        progress_label="val",
+    )
 
     print(
         " ".join(

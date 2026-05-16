@@ -24,6 +24,7 @@ class Stage1RunConfig:
     config_path: str
     output_dir: str
     device: str = "cuda"
+    allow_cpu_fallback: bool = False
 
 
 def load_config(path: str) -> dict:
@@ -70,7 +71,14 @@ def run_stage1_training(run_config: Stage1RunConfig) -> None:
         ffw_multiplier=int(config["model"].get("ffw_multiplier", 4)),
         dropout=float(config["model"].get("dropout", 0.1)),
     )
-    device = torch.device(run_config.device if torch.cuda.is_available() else "cpu")
+    requested_device = run_config.device
+    cuda_available = torch.cuda.is_available()
+    if requested_device == "cuda" and not cuda_available and not run_config.allow_cpu_fallback:
+        raise RuntimeError(
+            "CUDA was requested for Stage 1 training, but torch.cuda.is_available() returned False. "
+            "Refusing to silently fall back to CPU."
+        )
+    device = torch.device(requested_device if cuda_available else "cpu")
     model = Stage1CausalLM(model_config).to(device)
     use_bf16 = device.type == "cuda" and torch.cuda.is_bf16_supported()
     autocast_dtype = torch.bfloat16 if use_bf16 else torch.float16
