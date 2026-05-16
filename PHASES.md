@@ -50,12 +50,14 @@ Current status:
 ## Phase 3: Minimal Model
 
 - `[ ]` Implement LM extension with expanded vocabulary and action head
+- `[~]` Build Stage 1 alignment dataset pipeline
 - `[ ]` Train Stage 1 modality alignment
 
 Outcome:
 
 - Base model can process the schema correctly
 - ASR/TTS token mapping works well enough to continue
+- LibriSpeech-style data can be converted into Stage 1 `ASR`/`TTS` manifests with real speech tokens
 
 ## Phase 4: Half-Duplex Dialogue
 
