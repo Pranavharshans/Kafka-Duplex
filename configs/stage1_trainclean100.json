@@ -1,0 +1,37 @@
+{
+  "stage": "stage1_alignment",
+  "dataset": {
+    "name": "LibriSpeechTrainClean100Bootstrap",
+    "train_manifest": "data/processed/stage1_trainclean100/train.stage1.jsonl",
+    "val_manifest": "data/processed/stage1_trainclean100/val.stage1.jsonl",
+    "text_tokenizer": "mock_text_ids_until_real_tokenizer_is_wired",
+    "speech_codec": "mock",
+    "chunk_ms": 200,
+    "speech_tokens_per_chunk": 10
+  },
+  "model": {
+    "backbone": "Stage1BootstrapLM",
+    "context_length": 1024,
+    "vocab_size": 53260,
+    "hidden_size": 768,
+    "num_layers": 12,
+    "num_heads": 12,
+    "ffw_multiplier": 4,
+    "dropout": 0.1
+  },
+  "optimization": {
+    "epochs": 3,
+    "effective_batch_size": 32,
+    "micro_batch_size": 4,
+    "learning_rate": 0.0001,
+    "warmup_steps": 1000,
+    "weight_decay": 0.01,
+    "max_grad_norm": 1.0
+  },
+  "evaluation": {
+    "eval_every_steps": 1000,
+    "checkpoint_every_steps": 5000,
+    "wer_num_samples": 64,
+    "tts_num_prompts": 8
+  }
+}

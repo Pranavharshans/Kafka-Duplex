@@ -10,6 +10,11 @@ import torch
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 
+try:
+    from torch.utils.tensorboard import SummaryWriter
+except ImportError:  # pragma: no cover - optional at runtime
+    SummaryWriter = None
+
 from models.stage1_model import Stage1CausalLM, Stage1ModelConfig
 from training.stage1_dataset import Stage1JsonlDataset, collate_stage1_batch
 
@@ -42,6 +47,8 @@ def run_stage1_training(run_config: Stage1RunConfig) -> None:
     config = load_config(run_config.config_path)
     output_dir = Path(run_config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    tb_dir = output_dir / "tb"
+    writer = SummaryWriter(log_dir=str(tb_dir)) if SummaryWriter is not None else None
 
     train_manifest = Path(config["dataset"]["train_manifest"])
     val_manifest = Path(config["dataset"]["val_manifest"])
@@ -112,9 +119,12 @@ def run_stage1_training(run_config: Stage1RunConfig) -> None:
 
                 if global_step % 20 == 0:
                     print(f"train step={global_step} epoch={epoch + 1} loss={loss.item():.4f} lr={lr:.6f}", flush=True)
+                    if writer is not None:
+                        writer.add_scalar("train/loss", float(loss.item()), global_step)
+                        writer.add_scalar("train/lr", float(lr), global_step)
 
                 if global_step % eval_every == 0:
-                    evaluate(model, val_loader, device, output_dir, global_step)
+                    evaluate(model, val_loader, device, output_dir, global_step, writer)
 
                 if global_step % checkpoint_every == 0:
                     checkpoint_path = output_dir / f"checkpoint-step-{global_step}.pt"
@@ -132,9 +142,18 @@ def run_stage1_training(run_config: Stage1RunConfig) -> None:
     final_path = output_dir / "checkpoint-final.pt"
     torch.save({"model": model.state_dict(), "config": config, "global_step": global_step}, final_path)
     print(f"training_complete steps={global_step} final_checkpoint={final_path}", flush=True)
+    if writer is not None:
+        writer.close()
 
 
-def evaluate(model: Stage1CausalLM, val_loader: DataLoader, device: torch.device, output_dir: Path, step: int) -> None:
+def evaluate(
+    model: Stage1CausalLM,
+    val_loader: DataLoader,
+    device: torch.device,
+    output_dir: Path,
+    step: int,
+    writer: SummaryWriter | None = None,
+) -> None:
     model.eval()
     losses: list[float] = []
     sample_payloads: list[str] = []
@@ -170,4 +189,6 @@ def evaluate(model: Stage1CausalLM, val_loader: DataLoader, device: torch.device
     sample_path = eval_dir / f"step-{step}.samples.jsonl"
     sample_path.write_text("\n".join(sample_payloads) + ("\n" if sample_payloads else ""), encoding="utf-8")
     print(f"eval step={step} val_loss={average_loss:.4f} samples={sample_path}", flush=True)
+    if writer is not None:
+        writer.add_scalar("eval/loss", float(average_loss), step)
     model.train()
