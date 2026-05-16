@@ -9,5 +9,6 @@ Research prototype for an action-conditioned full-duplex speech model.
 - Real token probe: `python3 scripts/probe_cosyvoice_tokens.py --input-wav <file.wav>`
 - Stage 1 training now defaults to `/workspace/kafka_duplex_runs/...` so Vast.ai TensorBoard can read event files without a second log root
 - Stage 1 dataset build can combine multiple LibriSpeech subsets by repeating `--input-root`
+- Prebuilt Stage 1 manifests can be fetched from Hugging Face with `python3 scripts/fetch_stage1_hf_dataset.py`
 
 This repository is intentionally architecture-first and prototype-oriented.
