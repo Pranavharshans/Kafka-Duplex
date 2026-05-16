@@ -58,6 +58,7 @@ Outcome:
 - Base model can process the schema correctly
 - ASR/TTS token mapping works well enough to continue
 - LibriSpeech-style data can be converted into Stage 1 `ASR`/`TTS` manifests with real speech tokens
+- The Stage 1 dataset builder can now merge multiple LibriSpeech subsets for larger runs such as `train-clean-460`
 
 ## Phase 4: Half-Duplex Dialogue
 

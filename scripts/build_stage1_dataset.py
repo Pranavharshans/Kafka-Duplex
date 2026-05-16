@@ -27,7 +27,12 @@ SUPPORTED_AUDIO_EXTENSIONS = {".flac", ".wav"}
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build Stage 1 alignment manifests.")
-    parser.add_argument("--input-root", required=True, help="LibriSpeech root or subset directory.")
+    parser.add_argument(
+        "--input-root",
+        action="append",
+        required=True,
+        help="LibriSpeech root or subset directory. Repeat this flag to combine multiple subsets.",
+    )
     parser.add_argument("--output-root", required=True, help="Output directory for JSONL manifests.")
     parser.add_argument("--codec", default="mock", help="Codec adapter: mock or cosyvoice.")
     parser.add_argument("--val-ratio", type=float, default=0.02, help="Validation ratio.")
@@ -116,14 +121,17 @@ def encode_utterance(utterance: LibriSpeechUtterance, codec_name: str) -> tuple[
 
 def main() -> None:
     args = parse_args()
-    input_root = Path(args.input_root).expanduser().resolve()
+    input_roots = [Path(value).expanduser().resolve() for value in args.input_root]
     output_root = Path(args.output_root).expanduser().resolve()
 
-    utterances = discover_utterances(input_root)
+    utterances: list[LibriSpeechUtterance] = []
+    for input_root in input_roots:
+        utterances.extend(discover_utterances(input_root))
     if args.limit > 0:
         utterances = utterances[: args.limit]
     if not utterances:
-        raise RuntimeError(f"No LibriSpeech-style utterances found under {input_root}.")
+        joined_roots = ", ".join(str(path) for path in input_roots)
+        raise RuntimeError(f"No LibriSpeech-style utterances found under {joined_roots}.")
 
     train_utterances, val_utterances = deterministic_split(utterances, val_ratio=args.val_ratio, seed=args.seed)
 
@@ -148,7 +156,7 @@ def main() -> None:
             [
                 "stage1_dataset",
                 f"codec={args.codec}",
-                f"input_root={input_root}",
+                f"input_roots={','.join(str(path) for path in input_roots)}",
                 f"train_examples={train_count}",
                 f"val_examples={val_count}",
                 f"train_manifest={train_path}",

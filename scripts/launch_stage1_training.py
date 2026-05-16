@@ -19,7 +19,11 @@ if str(ROOT) not in sys.path:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Validate and print Stage 1 training launch parameters.")
     parser.add_argument("--config", default="configs/stage1_alignment.json", help="Path to Stage 1 config JSON.")
-    parser.add_argument("--output-dir", default="training_runs/stage1", help="Directory for checkpoints and eval outputs.")
+    parser.add_argument(
+        "--output-dir",
+        default="/workspace/kafka_duplex_runs/stage1",
+        help="Directory for checkpoints, eval outputs, and TensorBoard event files.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Only print parameters and dataset checks.")
     return parser.parse_args()
 

@@ -7,5 +7,7 @@ Research prototype for an action-conditioned full-duplex speech model.
 - Measured codec assumption: the tested `CosyVoice-300M` tokenizer path emits `10` speech tokens per `200ms`
 - Runtime example env: [configs/runtime.example.env](configs/runtime.example.env)
 - Real token probe: `python3 scripts/probe_cosyvoice_tokens.py --input-wav <file.wav>`
+- Stage 1 training now defaults to `/workspace/kafka_duplex_runs/...` so Vast.ai TensorBoard can read event files without a second log root
+- Stage 1 dataset build can combine multiple LibriSpeech subsets by repeating `--input-root`
 
 This repository is intentionally architecture-first and prototype-oriented.
