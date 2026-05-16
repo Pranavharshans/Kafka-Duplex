@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_DIR="${REPO_DIR:-/workspace/Kafka-Duplex}"
-VENV_DIR="${VENV_DIR:-/workspace/venv}"
+if [[ -d "/workspace" ]]; then
+  DEFAULT_ROOT="/workspace"
+else
+  DEFAULT_ROOT="${HOME}"
+fi
+
+REPO_DIR="${REPO_DIR:-${DEFAULT_ROOT}/Kafka-Duplex}"
+VENV_DIR="${VENV_DIR:-${DEFAULT_ROOT}/venv-kafka-duplex}"
 HF_REPO_ID="${HF_REPO_ID:-Praha-Labs/kafka-duplex-stage1-trainclean460}"
-DATASET_ROOT="${DATASET_ROOT:-/workspace/kafka_duplex_data/stage1_trainclean460}"
-RUN_ROOT="${RUN_ROOT:-/workspace/kafka_duplex_runs/stage1_trainclean460}"
+DATASET_ROOT="${DATASET_ROOT:-${DEFAULT_ROOT}/kafka_duplex_data/stage1_trainclean460}"
+RUN_ROOT="${RUN_ROOT:-${DEFAULT_ROOT}/kafka_duplex_runs/stage1_trainclean460}"
 CONFIG_PATH="${CONFIG_PATH:-configs/stage1_trainclean460_40gb.json}"
 
 if [[ -z "${HF_TOKEN:-}" ]]; then
@@ -13,7 +19,8 @@ if [[ -z "${HF_TOKEN:-}" ]]; then
   exit 1
 fi
 
-cd /workspace
+mkdir -p "$(dirname "$REPO_DIR")" "$(dirname "$VENV_DIR")" "$(dirname "$DATASET_ROOT")" "$(dirname "$RUN_ROOT")"
+cd "$(dirname "$REPO_DIR")"
 if [[ ! -d "$REPO_DIR/.git" ]]; then
   git clone https://github.com/Pranavharshans/Kafka-Duplex.git "$REPO_DIR"
 fi
