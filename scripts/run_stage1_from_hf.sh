@@ -61,13 +61,39 @@ if [[ -n "${HF_TOKEN:-}" ]]; then
 fi
 "$PYTHON_BIN" "${HF_FETCH_ARGS[@]}"
 
+RUNTIME_CONFIG_PATH="$RUN_ROOT/runtime_config.json"
+"$PYTHON_BIN" - <<'PY'
+import json
+import os
+from pathlib import Path
+
+config_path = Path(os.environ["CONFIG_PATH"]).expanduser().resolve()
+runtime_config_path = Path(os.environ["RUNTIME_CONFIG_PATH"]).expanduser().resolve()
+dataset_root = Path(os.environ["DATASET_ROOT"]).expanduser().resolve()
+run_root = Path(os.environ["RUN_ROOT"]).expanduser().resolve()
+
+with config_path.open("r", encoding="utf-8") as handle:
+    config = json.load(handle)
+
+config["dataset"]["train_manifest"] = str(dataset_root / "train.stage1.jsonl")
+config["dataset"]["val_manifest"] = str(dataset_root / "val.stage1.jsonl")
+runtime_config_path.parent.mkdir(parents=True, exist_ok=True)
+with runtime_config_path.open("w", encoding="utf-8") as handle:
+    json.dump(config, handle, indent=2)
+    handle.write("\n")
+
+print(f"runtime_config_ready path={runtime_config_path}")
+print(f"runtime_train_manifest={config['dataset']['train_manifest']}")
+print(f"runtime_val_manifest={config['dataset']['val_manifest']}")
+PY
+
 if [[ "$USE_SYSTEM_PYTHON" == "1" ]]; then
-  NOHUP_CMD="cd '$REPO_DIR' && '$PYTHON_BIN' scripts/launch_stage1_training.py --config '$CONFIG_PATH' --output-dir '$RUN_ROOT' > '$RUN_ROOT/train.log' 2>&1"
+  NOHUP_CMD="cd '$REPO_DIR' && '$PYTHON_BIN' scripts/launch_stage1_training.py --config '$RUNTIME_CONFIG_PATH' --output-dir '$RUN_ROOT' > '$RUN_ROOT/train.log' 2>&1"
 else
-  NOHUP_CMD="source '$VENV_DIR/bin/activate' && cd '$REPO_DIR' && '$PYTHON_BIN' scripts/launch_stage1_training.py --config '$CONFIG_PATH' --output-dir '$RUN_ROOT' > '$RUN_ROOT/train.log' 2>&1"
+  NOHUP_CMD="source '$VENV_DIR/bin/activate' && cd '$REPO_DIR' && '$PYTHON_BIN' scripts/launch_stage1_training.py --config '$RUNTIME_CONFIG_PATH' --output-dir '$RUN_ROOT' > '$RUN_ROOT/train.log' 2>&1"
 fi
 
 nohup bash -lc "$NOHUP_CMD" > "$RUN_ROOT/driver.log" 2>&1 < /dev/null &
 
-echo "stage1_run_started config=$CONFIG_PATH run_root=$RUN_ROOT dataset_root=$DATASET_ROOT python_bin=$PYTHON_BIN use_system_python=$USE_SYSTEM_PYTHON"
+echo "stage1_run_started config=$RUNTIME_CONFIG_PATH run_root=$RUN_ROOT dataset_root=$DATASET_ROOT python_bin=$PYTHON_BIN use_system_python=$USE_SYSTEM_PYTHON"
 echo "tail -f $RUN_ROOT/train.log"
