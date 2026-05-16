@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
-import time
 
 import torch
 from torch.optim import AdamW
@@ -66,6 +65,9 @@ def run_stage1_training(run_config: Stage1RunConfig) -> None:
     )
     device = torch.device(run_config.device if torch.cuda.is_available() else "cpu")
     model = Stage1CausalLM(model_config).to(device)
+    use_bf16 = device.type == "cuda" and torch.cuda.is_bf16_supported()
+    autocast_dtype = torch.bfloat16 if use_bf16 else torch.float16
+    scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda" and not use_bf16)
 
     optimizer = AdamW(
         model.parameters(),
@@ -93,16 +95,19 @@ def run_stage1_training(run_config: Stage1RunConfig) -> None:
             labels = batch["labels"].to(device)
             attention_mask = batch["attention_mask"].to(device)
 
-            logits, loss = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-            (loss / grad_accum_steps).backward()
+            with torch.autocast(device_type=device.type, dtype=autocast_dtype, enabled=device.type == "cuda"):
+                logits, loss = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+            scaler.scale(loss / grad_accum_steps).backward()
 
             if train_iter % grad_accum_steps == 0:
                 global_step += 1
                 lr = lr_for_step(float(config["optimization"]["learning_rate"]), warmup_steps, global_step)
                 for group in optimizer.param_groups:
                     group["lr"] = lr
+                scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
-                optimizer.step()
+                scaler.step(optimizer)
+                scaler.update()
                 optimizer.zero_grad(set_to_none=True)
 
                 if global_step % 20 == 0:
@@ -138,7 +143,8 @@ def evaluate(model: Stage1CausalLM, val_loader: DataLoader, device: torch.device
             input_ids = batch["input_ids"].to(device)
             labels = batch["labels"].to(device)
             attention_mask = batch["attention_mask"].to(device)
-            logits, loss = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+            with torch.autocast(device_type=device.type, dtype=torch.bfloat16 if device.type == "cuda" and torch.cuda.is_bf16_supported() else torch.float16, enabled=device.type == "cuda"):
+                logits, loss = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
             losses.append(loss.item())
 
             if batch_index == 0:
