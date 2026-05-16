@@ -44,6 +44,26 @@ def greedy_decode(logits: torch.Tensor) -> list[int]:
     return logits.argmax(dim=-1).tolist()
 
 
+def per_example_losses(logits: torch.Tensor, labels: torch.Tensor) -> list[float]:
+    shift_logits = logits[:, :-1, :].contiguous()
+    shift_labels = labels[:, 1:].contiguous()
+    token_losses = torch.nn.functional.cross_entropy(
+        shift_logits.view(-1, shift_logits.size(-1)),
+        shift_labels.view(-1),
+        ignore_index=-100,
+        reduction="none",
+    ).view(shift_labels.size())
+    valid_mask = shift_labels.ne(-100)
+    losses: list[float] = []
+    for row_loss, row_mask in zip(token_losses, valid_mask, strict=True):
+        valid_count = int(row_mask.sum().item())
+        if valid_count == 0:
+            losses.append(0.0)
+            continue
+        losses.append(float(row_loss[row_mask].mean().item()))
+    return losses
+
+
 def run_stage1_training(run_config: Stage1RunConfig) -> None:
     config = load_config(run_config.config_path)
     output_dir = Path(run_config.output_dir)
@@ -164,7 +184,9 @@ def evaluate(
 ) -> None:
     model.eval()
     losses: list[float] = []
-    sample_payloads: list[str] = []
+    task_losses: dict[str, list[float]] = {"ASR": [], "TTS": []}
+    asr_sample_payloads: list[str] = []
+    tts_sample_payloads: list[str] = []
     with torch.no_grad():
         for batch_index, batch in enumerate(val_loader):
             input_ids = batch["input_ids"].to(device)
@@ -173,30 +195,52 @@ def evaluate(
             with torch.autocast(device_type=device.type, dtype=torch.bfloat16 if device.type == "cuda" and torch.cuda.is_bf16_supported() else torch.float16, enabled=device.type == "cuda"):
                 logits, loss = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
             losses.append(loss.item())
-
-            if batch_index == 0:
-                greedy = greedy_decode(logits[0, :-1])
-                sample_payloads.append(
-                    json.dumps(
-                        {
-                            "example_id": batch["example_ids"][0],
-                            "task": batch["tasks"][0],
-                            "transcript": batch["transcripts"][0],
-                            "predicted_token_ids": greedy[:64],
-                        },
-                        ensure_ascii=True,
-                    )
+            example_losses = per_example_losses(logits.float(), labels)
+            for idx, task in enumerate(batch["tasks"]):
+                task_losses.setdefault(task, []).append(example_losses[idx])
+                greedy = greedy_decode(logits[idx, :-1])
+                payload = json.dumps(
+                    {
+                        "example_id": batch["example_ids"][idx],
+                        "task": task,
+                        "transcript": batch["transcripts"][idx],
+                        "predicted_token_ids": greedy[:64],
+                        "target_token_ids": input_ids[idx, :64].tolist(),
+                    },
+                    ensure_ascii=True,
                 )
+                if task == "ASR" and not asr_sample_payloads:
+                    asr_sample_payloads.append(payload)
+                if task == "TTS" and not tts_sample_payloads:
+                    tts_sample_payloads.append(payload)
 
             if batch_index >= 7:
                 break
 
     average_loss = sum(losses) / len(losses)
+    asr_loss = sum(task_losses["ASR"]) / len(task_losses["ASR"]) if task_losses["ASR"] else average_loss
+    tts_loss = sum(task_losses["TTS"]) / len(task_losses["TTS"]) if task_losses["TTS"] else average_loss
     eval_dir = output_dir / "eval"
     eval_dir.mkdir(parents=True, exist_ok=True)
-    sample_path = eval_dir / f"step-{step}.samples.jsonl"
-    sample_path.write_text("\n".join(sample_payloads) + ("\n" if sample_payloads else ""), encoding="utf-8")
-    print(f"eval step={step} val_loss={average_loss:.4f} samples={sample_path}", flush=True)
+    asr_sample_path = eval_dir / f"step-{step}.asr.samples.jsonl"
+    asr_sample_path.write_text("\n".join(asr_sample_payloads) + ("\n" if asr_sample_payloads else ""), encoding="utf-8")
+    tts_sample_path = eval_dir / f"step-{step}.tts.samples.jsonl"
+    tts_sample_path.write_text("\n".join(tts_sample_payloads) + ("\n" if tts_sample_payloads else ""), encoding="utf-8")
+    print(
+        " ".join(
+            [
+                f"eval step={step}",
+                f"val_loss={average_loss:.4f}",
+                f"asr_val_loss={asr_loss:.4f}",
+                f"tts_val_loss={tts_loss:.4f}",
+                f"asr_samples={asr_sample_path}",
+                f"tts_samples={tts_sample_path}",
+            ]
+        ),
+        flush=True,
+    )
     if writer is not None:
         writer.add_scalar("eval/loss", float(average_loss), step)
+        writer.add_scalar("eval/asr_loss", float(asr_loss), step)
+        writer.add_scalar("eval/tts_loss", float(tts_loss), step)
     model.train()
