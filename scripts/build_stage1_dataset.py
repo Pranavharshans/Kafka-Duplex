@@ -16,6 +16,7 @@ from kafka_duplex.stage1 import (
     LibriSpeechUtterance,
     Stage1AlignmentExample,
     deterministic_split,
+    speech_to_vocab_ids,
     text_to_mock_ids,
     write_jsonl,
 )
@@ -87,9 +88,10 @@ def encode_utterance(utterance: LibriSpeechUtterance, codec_name: str) -> tuple[
     codec = create_codec(codec_name)
     audio = read_audio(utterance.audio_path)
     chunks = chunk_audio(audio, chunk_ms=200)
-    speech_token_ids: list[int] = []
+    raw_speech_token_ids: list[int] = []
     for chunk in chunks:
-        speech_token_ids.extend(codec.encode_chunk(chunk))
+        raw_speech_token_ids.extend(codec.encode_chunk(chunk))
+    speech_token_ids = speech_to_vocab_ids(raw_speech_token_ids)
 
     text_token_ids = text_to_mock_ids(utterance.transcript)
     common = {

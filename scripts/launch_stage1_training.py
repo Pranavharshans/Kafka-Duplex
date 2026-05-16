@@ -8,7 +8,6 @@ training implementation once the Stage 1 model class lands.
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -20,6 +19,7 @@ if str(ROOT) not in sys.path:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Validate and print Stage 1 training launch parameters.")
     parser.add_argument("--config", default="configs/stage1_alignment.json", help="Path to Stage 1 config JSON.")
+    parser.add_argument("--output-dir", default="training_runs/stage1", help="Directory for checkpoints and eval outputs.")
     parser.add_argument("--dry-run", action="store_true", help="Only print parameters and dataset checks.")
     return parser.parse_args()
 
@@ -27,12 +27,14 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     config_path = Path(args.config).expanduser().resolve()
+    import json
+
     with config_path.open("r", encoding="utf-8") as handle:
         config = json.load(handle)
 
     dataset = config["dataset"]
-    train_manifest = (ROOT / dataset["train_manifest"]).resolve()
-    val_manifest = (ROOT / dataset["val_manifest"]).resolve()
+    train_manifest = Path(dataset["train_manifest"]).resolve()
+    val_manifest = Path(dataset["val_manifest"]).resolve()
 
     print(
         " ".join(
@@ -53,9 +55,13 @@ def main() -> None:
     if args.dry_run:
         return
 
-    raise RuntimeError(
-        "Stage 1 dataset/config are ready, but the actual training loop is not implemented yet. "
-        "Add the Stage 1 model/trainer code before using this launcher for a real run."
+    from training.stage1_train import Stage1RunConfig, run_stage1_training
+
+    run_stage1_training(
+        Stage1RunConfig(
+            config_path=str(config_path),
+            output_dir=args.output_dir,
+        )
     )
 
 

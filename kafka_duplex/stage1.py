@@ -8,7 +8,7 @@ from pathlib import Path
 import random
 from typing import Iterable
 
-from .schema import SPECIAL_TOKENS
+from .schema import SPECIAL_TOKEN_IDS, SPECIAL_TOKENS, SPEECH_VOCAB_OFFSET
 
 
 @dataclass(slots=True)
@@ -62,9 +62,34 @@ class Stage1AlignmentExample:
             SPECIAL_TOKENS["EOS"],
         ]
 
+    def to_training_token_ids(self) -> list[int]:
+        """Serialize to a pure integer sequence for training."""
+
+        if self.task == "ASR":
+            return [
+                SPECIAL_TOKEN_IDS["ASR"],
+                SPECIAL_TOKEN_IDS["SOS"],
+                *self.speech_token_ids,
+                SPECIAL_TOKEN_IDS["EOS"],
+                SPECIAL_TOKEN_IDS["SOT"],
+                *self.text_token_ids,
+                SPECIAL_TOKEN_IDS["EOT"],
+            ]
+
+        return [
+            SPECIAL_TOKEN_IDS["TTS"],
+            SPECIAL_TOKEN_IDS["SOT"],
+            *self.text_token_ids,
+            SPECIAL_TOKEN_IDS["EOT"],
+            SPECIAL_TOKEN_IDS["SOS"],
+            *self.speech_token_ids,
+            SPECIAL_TOKEN_IDS["EOS"],
+        ]
+
     def to_json(self) -> str:
         payload = asdict(self)
         payload["sequence"] = self.to_training_sequence()
+        payload["sequence_token_ids"] = self.to_training_token_ids()
         return json.dumps(payload, ensure_ascii=True)
 
 
@@ -86,6 +111,12 @@ def text_to_mock_ids(text: str, *, vocab_offset: int = 10_000) -> list[int]:
     if not words:
         return [vocab_offset]
     return [vocab_offset + (sum(ord(ch) for ch in word) % 2048) for word in words]
+
+
+def speech_to_vocab_ids(raw_speech_token_ids: list[int]) -> list[int]:
+    """Map codec-local speech codes into the global model vocabulary."""
+
+    return [SPEECH_VOCAB_OFFSET + token_id for token_id in raw_speech_token_ids]
 
 
 def write_jsonl(path: str | Path, examples: Iterable[Stage1AlignmentExample]) -> int:
