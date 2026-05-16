@@ -42,7 +42,10 @@ Current status:
 - Phase 2 scaffolding is implemented with `audio.py`, `codec.py`, offline validation, and prerecorded-audio runners
 - Real codec validation found that the tested `CosyVoice-300M` tokenizer path emits `10 speech tokens / 200ms`
 - The repo now includes a real CosyVoice adapter shape, environment-based runtime config, and a dedicated token probe script
-- GPU validation is still required to confirm the in-repo adapter against the actual CosyVoice runtime and checkpoints
+- In-repo GPU validation now passes for real CosyVoice speech-token extraction on chunked audio
+- The first `200ms` encode call is cold-start heavy, while steady-state encode is about `31-36ms` in the current environment
+- Real token-to-wave decode is still not wired in this repo adapter, and ONNX CUDA remains misconfigured on the test box (`libcublasLt.so.11` missing)
+- Additional GPU work is still required only for token-to-wave decode validation and a cleaner CUDA-backed ONNX setup
 
 ## Phase 3: Minimal Model
 

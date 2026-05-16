@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import inspect
 import os
 from pathlib import Path
 import time
@@ -134,9 +135,14 @@ class CosyVoiceCodec:
 
             import sys
 
-            repo_str = str(repo_path)
-            if repo_str not in sys.path:
-                sys.path.insert(0, repo_str)
+            repo_candidates = [
+                repo_path,
+                repo_path / "third_party" / "Matcha-TTS",
+            ]
+            for candidate in repo_candidates:
+                candidate_str = str(candidate)
+                if candidate.exists() and candidate_str not in sys.path:
+                    sys.path.insert(0, candidate_str)
 
         try:
             from cosyvoice.cli.cosyvoice import CosyVoice  # type: ignore
@@ -150,13 +156,16 @@ class CosyVoiceCodec:
         if not model_dir.exists():
             raise RuntimeError(f"Configured CosyVoice model directory does not exist: {model_dir}")
 
-        model = CosyVoice(
-            str(model_dir),
-            load_jit=self.config.load_jit,
-            load_trt=self.config.load_trt,
-            load_vllm=self.config.load_vllm,
-            fp16=self.config.fp16,
-        )
+        candidate_kwargs = {
+            "load_jit": self.config.load_jit,
+            "load_trt": self.config.load_trt,
+            "load_vllm": self.config.load_vllm,
+            "fp16": self.config.fp16,
+        }
+        accepted = inspect.signature(CosyVoice.__init__).parameters
+        init_kwargs = {key: value for key, value in candidate_kwargs.items() if key in accepted}
+
+        model = CosyVoice(str(model_dir), **init_kwargs)
         self._frontend = model.frontend
         return self._frontend
 
@@ -186,12 +195,24 @@ class CosyVoiceCodec:
     def encode_chunk(self, chunk: AudioChunk) -> list[int]:
         frontend = self._ensure_frontend()
         speech = self._chunk_to_tensor(chunk)
-        token_tensor = frontend._extract_speech_token(speech)
-
         try:
-            flattened = token_tensor.detach().cpu().reshape(-1).tolist()
-        except AttributeError:
-            flattened = list(token_tensor.reshape(-1))
+            import numpy as np
+            import whisper
+        except ImportError as exc:
+            raise RuntimeError(
+                "CosyVoiceCodec encode_chunk requires numpy and openai-whisper to be installed."
+            ) from exc
+
+        feat = whisper.log_mel_spectrogram(speech, n_mels=128)
+        session = frontend.speech_tokenizer_session
+        raw = session.run(
+            None,
+            {
+                session.get_inputs()[0].name: feat.detach().cpu().numpy(),
+                session.get_inputs()[1].name: np.array([feat.shape[2]], dtype=np.int32),
+            },
+        )[0]
+        flattened = raw.reshape(-1).tolist()
 
         return [int(token) for token in flattened]
 
