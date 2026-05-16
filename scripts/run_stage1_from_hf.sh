@@ -62,6 +62,10 @@ fi
 "$PYTHON_BIN" "${HF_FETCH_ARGS[@]}"
 
 RUNTIME_CONFIG_PATH="$RUN_ROOT/runtime_config.json"
+export CONFIG_PATH
+export RUNTIME_CONFIG_PATH
+export DATASET_ROOT
+export RUN_ROOT
 "$PYTHON_BIN" - <<'PY'
 import json
 import os
