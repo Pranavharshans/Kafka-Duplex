@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import as_completed
+from functools import lru_cache
 import sys
 from pathlib import Path
 
@@ -35,17 +36,31 @@ def parse_args() -> argparse.Namespace:
         help="LibriSpeech root or subset directory. Repeat this flag to combine multiple subsets.",
     )
     parser.add_argument("--output-root", required=True, help="Output directory for JSONL manifests.")
-    parser.add_argument("--codec", default="mock", help="Codec adapter: mock or cosyvoice.")
+    parser.add_argument("--codec", default="cosyvoice", help="Codec adapter: cosyvoice or mock.")
     parser.add_argument("--val-ratio", type=float, default=0.02, help="Validation ratio.")
     parser.add_argument("--seed", type=int, default=13, help="Deterministic split seed.")
     parser.add_argument("--limit", type=int, default=0, help="Optional max utterances to process.")
     parser.add_argument("--num-workers", type=int, default=4, help="Parallel workers for encoding.")
     parser.add_argument(
         "--text-tokenizer",
-        default="mock",
-        help="Text tokenizer mode: mock or a Hugging Face model name such as LiquidAI/LFM2.5-350M.",
+        default="LiquidAI/LFM2.5-350M",
+        help="Text tokenizer mode: a Hugging Face model name such as LiquidAI/LFM2.5-350M, or mock for legacy scaffolding only.",
     )
     return parser.parse_args()
+
+
+@lru_cache(maxsize=4)
+def get_codec(codec_name: str):
+    return create_codec(codec_name)
+
+
+@lru_cache(maxsize=4)
+def get_token_interface(text_tokenizer_name: str):
+    return (
+        legacy_stage1_token_interface()
+        if text_tokenizer_name == "mock"
+        else build_hf_stage1_token_interface(text_tokenizer_name)
+    )
 
 
 def read_audio(path: str) -> AudioBuffer:
@@ -100,17 +115,13 @@ def encode_utterance(
     codec_name: str,
     text_tokenizer_name: str,
 ) -> tuple[Stage1AlignmentExample, Stage1AlignmentExample]:
-    codec = create_codec(codec_name)
+    codec = get_codec(codec_name)
     audio = read_audio(utterance.audio_path)
     chunks = chunk_audio(audio, chunk_ms=200)
     raw_speech_token_ids: list[int] = []
     for chunk in chunks:
         raw_speech_token_ids.extend(codec.encode_chunk(chunk))
-    token_interface = (
-        legacy_stage1_token_interface()
-        if text_tokenizer_name == "mock"
-        else build_hf_stage1_token_interface(text_tokenizer_name)
-    )
+    token_interface = get_token_interface(text_tokenizer_name)
     speech_token_ids = (
         speech_to_vocab_ids(raw_speech_token_ids)
         if text_tokenizer_name == "mock"
@@ -155,11 +166,7 @@ def stream_partition(
     example_count = 0
     completed = 0
     progress_every = max(1, min(500, total_items // 20 or 1))
-    token_interface = (
-        legacy_stage1_token_interface()
-        if text_tokenizer_name == "mock"
-        else build_hf_stage1_token_interface(text_tokenizer_name)
-    )
+    token_interface = get_token_interface(text_tokenizer_name)
 
     with output_path.open("w", encoding="utf-8") as handle:
         with ThreadPoolExecutor(max_workers=num_workers) as executor:
@@ -201,6 +208,12 @@ def stream_partition(
 
 def main() -> None:
     args = parse_args()
+    if args.codec == "cosyvoice" and args.num_workers != 1:
+        print(
+            "stage1_dataset_note codec=cosyvoice forcing_num_workers=1 reason=single_real_codec_session_is_safer_and_avoids_gpu_duplication",
+            flush=True,
+        )
+        args.num_workers = 1
     input_roots = [Path(value).expanduser().resolve() for value in args.input_root]
     output_root = Path(args.output_root).expanduser().resolve()
 

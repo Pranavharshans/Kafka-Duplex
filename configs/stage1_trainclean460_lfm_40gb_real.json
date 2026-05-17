@@ -1,0 +1,54 @@
+{
+  "stage": "stage1_alignment",
+  "dataset": {
+    "name": "LibriSpeechTrainClean460LFM40GBReal",
+    "train_manifest": "/workspace/kafka_duplex_data/stage1_trainclean460_real/train.stage1.jsonl",
+    "val_manifest": "/workspace/kafka_duplex_data/stage1_trainclean460_real/val.stage1.jsonl",
+    "text_tokenizer": "LiquidAI/LFM2.5-350M",
+    "speech_codec": "cosyvoice",
+    "chunk_ms": 200,
+    "speech_tokens_per_chunk": 10
+  },
+  "model": {
+    "backbone": "HFCausalLM",
+    "hf_model_name": "LiquidAI/LFM2.5-350M",
+    "context_length": 1024,
+    "vocab_size": 69644
+  },
+  "optimization": {
+    "epochs": 3,
+    "effective_batch_size": 128,
+    "micro_batch_size": 8,
+    "learning_rate": 0.00005,
+    "warmup_steps": 1000,
+    "weight_decay": 0.01,
+    "max_grad_norm": 1.0
+  },
+  "evaluation": {
+    "eval_every_steps": 1000,
+    "checkpoint_every_steps": 5000,
+    "wer_num_samples": 64,
+    "tts_num_prompts": 8
+  },
+  "token_interface": {
+    "text_tokenizer_name": "LiquidAI/LFM2.5-350M",
+    "text_vocab_size": 65536,
+    "speech_vocab_offset": 65548,
+    "speech_vocab_size": 4096,
+    "total_vocab_size": 69644,
+    "special_token_ids": {
+      "CHUNK": 65536,
+      "ASR": 65537,
+      "TTS": 65538,
+      "SOS": 65539,
+      "EOS": 65540,
+      "SOT": 65541,
+      "EOT": 65542,
+      "SIL_SPEECH": 65543,
+      "SIL_TEXT": 65544,
+      "LISTEN": 65545,
+      "SPEAK": 65546,
+      "BACKCHANNEL": 65547
+    }
+  }
+}

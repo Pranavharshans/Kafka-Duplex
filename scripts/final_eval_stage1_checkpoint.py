@@ -40,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="cuda", help="Inference device.")
     parser.add_argument("--max-asr-samples", type=int, default=32, help="Number of ASR examples to evaluate.")
     parser.add_argument("--max-tts-samples", type=int, default=8, help="Number of TTS examples to evaluate.")
-    parser.add_argument("--codec", default="mock", help="Codec used to optionally decode TTS outputs.")
+    parser.add_argument("--codec", default="cosyvoice", help="Codec used to optionally decode TTS outputs.")
     parser.add_argument("--write-tts-audio", action="store_true", help="Decode and write TTS WAVs if the codec supports it.")
     return parser.parse_args()
 

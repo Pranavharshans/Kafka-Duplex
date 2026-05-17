@@ -13,6 +13,7 @@ HF_REPO_ID="${HF_REPO_ID:-Praha-Labs/kafka-duplex-stage1-trainclean460}"
 DATASET_ROOT="${DATASET_ROOT:-${DEFAULT_ROOT}/kafka_duplex_data/stage1_trainclean460}"
 RUN_ROOT="${RUN_ROOT:-${DEFAULT_ROOT}/kafka_duplex_runs/stage1_trainclean460}"
 CONFIG_PATH="${CONFIG_PATH:-configs/stage1_trainclean460_40gb.json}"
+SKIP_REMAP="${SKIP_REMAP:-0}"
 
 if [[ -z "${HF_TOKEN:-}" ]]; then
   echo "HF_TOKEN must be set to fetch the Stage 1 dataset." >&2
@@ -91,7 +92,7 @@ print(f"runtime_train_manifest={config['dataset']['train_manifest']}")
 print(f"runtime_val_manifest={config['dataset']['val_manifest']}")
 PY
 
-if [[ "${REMAPPED_DATASET_ROOT:-}" == "" ]]; then
+if [[ "$SKIP_REMAP" != "1" && "${REMAPPED_DATASET_ROOT:-}" == "" ]]; then
   REMAPPED_DATASET_ROOT="$("$PYTHON_BIN" - <<'PY'
 import json
 import os
@@ -113,7 +114,7 @@ PY
 )"
 fi
 
-if [[ "${REMAPPED_DATASET_ROOT:-}" != "" ]]; then
+if [[ "$SKIP_REMAP" != "1" && "${REMAPPED_DATASET_ROOT:-}" != "" ]]; then
   mkdir -p "$REMAPPED_DATASET_ROOT"
   HF_MODEL_NAME="$("$PYTHON_BIN" - <<'PY'
 import json, os
