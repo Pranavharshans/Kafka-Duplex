@@ -33,6 +33,21 @@ SPECIAL_TOKENS = {
     "BACKCHANNEL": "[BACKCHANNEL]",
 }
 
+SPECIAL_TOKEN_ORDER = [
+    "CHUNK",
+    "ASR",
+    "TTS",
+    "SOS",
+    "EOS",
+    "SOT",
+    "EOT",
+    "SIL_SPEECH",
+    "SIL_TEXT",
+    "LISTEN",
+    "SPEAK",
+    "BACKCHANNEL",
+]
+
 SPECIAL_TOKEN_IDS = {
     "CHUNK": 53248,
     "ASR": 53249,
@@ -49,6 +64,7 @@ SPECIAL_TOKEN_IDS = {
 }
 
 SPEECH_VOCAB_OFFSET = 49_152
+SPEECH_VOCAB_SIZE = 4_096
 
 ACTION_TOKEN_ORDER = {
     DuplexAction.LISTEN: SPECIAL_TOKENS["LISTEN"],

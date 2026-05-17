@@ -91,6 +91,57 @@ print(f"runtime_train_manifest={config['dataset']['train_manifest']}")
 print(f"runtime_val_manifest={config['dataset']['val_manifest']}")
 PY
 
+if [[ "${REMAPPED_DATASET_ROOT:-}" != "" ]]; then
+  mkdir -p "$REMAPPED_DATASET_ROOT"
+  HF_MODEL_NAME="$("$PYTHON_BIN" - <<'PY'
+import json, os
+from pathlib import Path
+config_path = Path(os.environ["RUNTIME_CONFIG_PATH"])
+with config_path.open("r", encoding="utf-8") as handle:
+    config = json.load(handle)
+print(config["model"].get("hf_model_name", "LiquidAI/LFM2.5-350M"))
+PY
+)"
+  "$PYTHON_BIN" scripts/remap_stage1_manifest_tokens.py \
+    --input-root "$DATASET_ROOT" \
+    --output-root "$REMAPPED_DATASET_ROOT" \
+    --hf-model-name "$HF_MODEL_NAME"
+  export DATASET_ROOT="$REMAPPED_DATASET_ROOT"
+  "$PYTHON_BIN" - <<'PY'
+import json
+import os
+from pathlib import Path
+
+config_path = Path(os.environ["RUNTIME_CONFIG_PATH"]).expanduser().resolve()
+dataset_root = Path(os.environ["DATASET_ROOT"]).expanduser().resolve()
+
+with config_path.open("r", encoding="utf-8") as handle:
+    config = json.load(handle)
+
+config["dataset"]["train_manifest"] = str(dataset_root / "train.stage1.jsonl")
+config["dataset"]["val_manifest"] = str(dataset_root / "val.stage1.jsonl")
+token_interface = {}
+for probe_name in ("train.stage1.jsonl", "val.stage1.jsonl"):
+    probe_path = dataset_root / probe_name
+    if probe_path.exists():
+        first_line = next((line for line in probe_path.read_text(encoding="utf-8").splitlines() if line.strip()), "")
+        if first_line:
+            row = json.loads(first_line)
+            token_interface = row.get("metadata", {}).get("token_interface", {})
+            break
+config["token_interface"] = token_interface
+config["model"]["vocab_size"] = int(token_interface.get("total_vocab_size", config["model"]["vocab_size"]))
+
+with config_path.open("w", encoding="utf-8") as handle:
+    json.dump(config, handle, indent=2)
+    handle.write("\n")
+
+print(f"runtime_remapped_train_manifest={config['dataset']['train_manifest']}")
+print(f"runtime_remapped_val_manifest={config['dataset']['val_manifest']}")
+print(f"runtime_vocab_size={config['model']['vocab_size']}")
+PY
+fi
+
 if [[ "$USE_SYSTEM_PYTHON" == "1" ]]; then
   NOHUP_CMD="cd '$REPO_DIR' && '$PYTHON_BIN' scripts/launch_stage1_training.py --config '$RUNTIME_CONFIG_PATH' --output-dir '$RUN_ROOT' > '$RUN_ROOT/train.log' 2>&1"
 else

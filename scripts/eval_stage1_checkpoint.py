@@ -52,24 +52,33 @@ def build_model(checkpoint_payload: dict, device: torch.device) -> Stage1CausalL
     return model
 
 
-def find_prompt_length(task: str, sequence_token_ids: list[int]) -> int:
+def resolve_special_token_ids(config: dict[str, object]) -> dict[str, int]:
+    token_interface = config.get("token_interface")
+    if isinstance(token_interface, dict):
+        token_ids = token_interface.get("special_token_ids")
+        if isinstance(token_ids, dict):
+            return {str(key): int(value) for key, value in token_ids.items()}
+    return dict(SPECIAL_TOKEN_IDS)
+
+
+def find_prompt_length(task: str, sequence_token_ids: list[int], special_token_ids: dict[str, int]) -> int:
     if task == "ASR":
-        marker = SPECIAL_TOKEN_IDS["SOT"]
+        marker = special_token_ids["SOT"]
     else:
-        marker = SPECIAL_TOKEN_IDS["SOS"]
+        marker = special_token_ids["SOS"]
     for index, token_id in enumerate(sequence_token_ids):
         if token_id == marker:
             return index + 1
     raise ValueError(f"Could not find prompt marker for task {task}.")
 
 
-def find_target_region(task: str, sequence_token_ids: list[int]) -> list[int]:
+def find_target_region(task: str, sequence_token_ids: list[int], special_token_ids: dict[str, int]) -> list[int]:
     if task == "ASR":
-        start_marker = SPECIAL_TOKEN_IDS["SOT"]
-        stop_marker = SPECIAL_TOKEN_IDS["EOT"]
+        start_marker = special_token_ids["SOT"]
+        stop_marker = special_token_ids["EOT"]
     else:
-        start_marker = SPECIAL_TOKEN_IDS["SOS"]
-        stop_marker = SPECIAL_TOKEN_IDS["EOS"]
+        start_marker = special_token_ids["SOS"]
+        stop_marker = special_token_ids["EOS"]
 
     start_index = None
     for index, token_id in enumerate(sequence_token_ids):
@@ -90,8 +99,8 @@ def find_target_region(task: str, sequence_token_ids: list[int]) -> list[int]:
     return sequence_token_ids[start_index:stop_index]
 
 
-def stop_token_for_task(task: str) -> int:
-    return SPECIAL_TOKEN_IDS["EOT"] if task == "ASR" else SPECIAL_TOKEN_IDS["EOS"]
+def stop_token_for_task(task: str, special_token_ids: dict[str, int]) -> int:
+    return special_token_ids["EOT"] if task == "ASR" else special_token_ids["EOS"]
 
 
 def greedy_generate(
@@ -115,21 +124,26 @@ def greedy_generate(
     return generated, "max_new_tokens"
 
 
-def evaluate_row(model: Stage1CausalLM, row: dict[str, object], device: torch.device) -> dict[str, object]:
+def evaluate_row(
+    model: Stage1CausalLM,
+    row: dict[str, object],
+    device: torch.device,
+    special_token_ids: dict[str, int],
+) -> dict[str, object]:
     task = str(row["task"])
     sequence_token_ids = list(row["sequence_token_ids"])
-    prompt_length = find_prompt_length(task, sequence_token_ids)
+    prompt_length = find_prompt_length(task, sequence_token_ids, special_token_ids)
     prompt_ids = sequence_token_ids[:prompt_length]
-    target_region = find_target_region(task, sequence_token_ids)
+    target_region = find_target_region(task, sequence_token_ids, special_token_ids)
     generated_ids, stop_reason = greedy_generate(
         model,
         prompt_ids=prompt_ids,
-        stop_token_id=stop_token_for_task(task),
+        stop_token_id=stop_token_for_task(task, special_token_ids),
         max_new_tokens=max(1, len(target_region) + 1),
         device=device,
     )
     generated_region = generated_ids[prompt_length:]
-    if generated_region and generated_region[-1] == stop_token_for_task(task):
+    if generated_region and generated_region[-1] == stop_token_for_task(task, special_token_ids):
         generated_region = generated_region[:-1]
 
     compared = min(len(generated_region), len(target_region))
@@ -164,6 +178,7 @@ def main() -> None:
     device = torch.device(args.device if torch.cuda.is_available() and args.device == "cuda" else "cpu")
     checkpoint_payload = torch.load(checkpoint_path, map_location=device)
     model = build_model(checkpoint_payload, device)
+    special_token_ids = resolve_special_token_ids(checkpoint_payload["config"])
 
     rows = load_rows(manifest_path)
     filtered_rows = []
@@ -179,7 +194,7 @@ def main() -> None:
     if not filtered_rows:
         raise RuntimeError("No manifest rows matched the requested filters.")
 
-    payloads = [evaluate_row(model, row, device) for row in filtered_rows]
+    payloads = [evaluate_row(model, row, device, special_token_ids) for row in filtered_rows]
     for payload in payloads:
         print(json.dumps(payload, ensure_ascii=True), flush=True)
 

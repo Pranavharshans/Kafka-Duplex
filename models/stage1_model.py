@@ -99,10 +99,8 @@ class Stage1CausalLM(nn.Module):
 
             self.hf_model = AutoModelForCausalLM.from_pretrained(config.hf_model_name)
             hf_vocab_size = int(self.hf_model.get_input_embeddings().num_embeddings)
-            if config.vocab_size > hf_vocab_size:
-                raise ValueError(
-                    f"Configured vocab_size={config.vocab_size} exceeds HF backbone vocab_size={hf_vocab_size}."
-                )
+            if config.vocab_size != hf_vocab_size:
+                self.hf_model.resize_token_embeddings(config.vocab_size)
             return
 
         raise ValueError(f"Unsupported Stage1 backbone: {config.backbone}")

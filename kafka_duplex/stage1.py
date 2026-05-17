@@ -38,58 +38,65 @@ class Stage1AlignmentExample:
     def prompt_token(self) -> str:
         return SPECIAL_TOKENS[self.task]
 
-    def to_training_sequence(self) -> list[str | int]:
+    def to_training_sequence(self, *, special_tokens: dict[str, str] | None = None) -> list[str | int]:
         """Serialize to the canonical Stage 1 flat sequence."""
+        token_names = special_tokens or SPECIAL_TOKENS
 
         if self.task == "ASR":
             return [
-                SPECIAL_TOKENS["ASR"],
-                SPECIAL_TOKENS["SOS"],
+                token_names["ASR"],
+                token_names["SOS"],
                 *self.speech_token_ids,
-                SPECIAL_TOKENS["EOS"],
-                SPECIAL_TOKENS["SOT"],
+                token_names["EOS"],
+                token_names["SOT"],
                 *self.text_token_ids,
-                SPECIAL_TOKENS["EOT"],
+                token_names["EOT"],
             ]
 
         return [
-            SPECIAL_TOKENS["TTS"],
-            SPECIAL_TOKENS["SOT"],
+            token_names["TTS"],
+            token_names["SOT"],
             *self.text_token_ids,
-            SPECIAL_TOKENS["EOT"],
-            SPECIAL_TOKENS["SOS"],
+            token_names["EOT"],
+            token_names["SOS"],
             *self.speech_token_ids,
-            SPECIAL_TOKENS["EOS"],
+            token_names["EOS"],
         ]
 
-    def to_training_token_ids(self) -> list[int]:
+    def to_training_token_ids(self, *, special_token_ids: dict[str, int] | None = None) -> list[int]:
         """Serialize to a pure integer sequence for training."""
+        token_ids = special_token_ids or SPECIAL_TOKEN_IDS
 
         if self.task == "ASR":
             return [
-                SPECIAL_TOKEN_IDS["ASR"],
-                SPECIAL_TOKEN_IDS["SOS"],
+                token_ids["ASR"],
+                token_ids["SOS"],
                 *self.speech_token_ids,
-                SPECIAL_TOKEN_IDS["EOS"],
-                SPECIAL_TOKEN_IDS["SOT"],
+                token_ids["EOS"],
+                token_ids["SOT"],
                 *self.text_token_ids,
-                SPECIAL_TOKEN_IDS["EOT"],
+                token_ids["EOT"],
             ]
 
         return [
-            SPECIAL_TOKEN_IDS["TTS"],
-            SPECIAL_TOKEN_IDS["SOT"],
+            token_ids["TTS"],
+            token_ids["SOT"],
             *self.text_token_ids,
-            SPECIAL_TOKEN_IDS["EOT"],
-            SPECIAL_TOKEN_IDS["SOS"],
+            token_ids["EOT"],
+            token_ids["SOS"],
             *self.speech_token_ids,
-            SPECIAL_TOKEN_IDS["EOS"],
+            token_ids["EOS"],
         ]
 
-    def to_json(self) -> str:
+    def to_json(
+        self,
+        *,
+        special_token_ids: dict[str, int] | None = None,
+        special_tokens: dict[str, str] | None = None,
+    ) -> str:
         payload = asdict(self)
-        payload["sequence"] = self.to_training_sequence()
-        payload["sequence_token_ids"] = self.to_training_token_ids()
+        payload["sequence"] = self.to_training_sequence(special_tokens=special_tokens)
+        payload["sequence_token_ids"] = self.to_training_token_ids(special_token_ids=special_token_ids)
         return json.dumps(payload, ensure_ascii=True)
 
 

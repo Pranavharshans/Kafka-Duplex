@@ -20,6 +20,7 @@ from kafka_duplex.stage1 import (
     speech_to_vocab_ids,
     text_to_mock_ids,
 )
+from kafka_duplex.token_interface import build_hf_stage1_token_interface, legacy_stage1_token_interface
 
 
 SUPPORTED_AUDIO_EXTENSIONS = {".flac", ".wav"}
@@ -39,6 +40,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=13, help="Deterministic split seed.")
     parser.add_argument("--limit", type=int, default=0, help="Optional max utterances to process.")
     parser.add_argument("--num-workers", type=int, default=4, help="Parallel workers for encoding.")
+    parser.add_argument(
+        "--text-tokenizer",
+        default="mock",
+        help="Text tokenizer mode: mock or a Hugging Face model name such as LiquidAI/LFM2.5-350M.",
+    )
     return parser.parse_args()
 
 
@@ -89,16 +95,32 @@ def discover_utterances(root: Path) -> list[LibriSpeechUtterance]:
     return utterances
 
 
-def encode_utterance(utterance: LibriSpeechUtterance, codec_name: str) -> tuple[Stage1AlignmentExample, Stage1AlignmentExample]:
+def encode_utterance(
+    utterance: LibriSpeechUtterance,
+    codec_name: str,
+    text_tokenizer_name: str,
+) -> tuple[Stage1AlignmentExample, Stage1AlignmentExample]:
     codec = create_codec(codec_name)
     audio = read_audio(utterance.audio_path)
     chunks = chunk_audio(audio, chunk_ms=200)
     raw_speech_token_ids: list[int] = []
     for chunk in chunks:
         raw_speech_token_ids.extend(codec.encode_chunk(chunk))
-    speech_token_ids = speech_to_vocab_ids(raw_speech_token_ids)
-
-    text_token_ids = text_to_mock_ids(utterance.transcript)
+    token_interface = (
+        legacy_stage1_token_interface()
+        if text_tokenizer_name == "mock"
+        else build_hf_stage1_token_interface(text_tokenizer_name)
+    )
+    speech_token_ids = (
+        speech_to_vocab_ids(raw_speech_token_ids)
+        if text_tokenizer_name == "mock"
+        else token_interface.speech_to_vocab_ids(raw_speech_token_ids)
+    )
+    text_token_ids = (
+        text_to_mock_ids(utterance.transcript)
+        if text_tokenizer_name == "mock"
+        else token_interface.encode_text(utterance.transcript)
+    )
     common = {
         "transcript": utterance.transcript,
         "text_token_ids": text_token_ids,
@@ -126,21 +148,35 @@ def stream_partition(
     output_path: Path,
     num_workers: int,
     progress_label: str,
+    text_tokenizer_name: str,
 ) -> int:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     total_items = len(items)
     example_count = 0
     completed = 0
     progress_every = max(1, min(500, total_items // 20 or 1))
+    token_interface = (
+        legacy_stage1_token_interface()
+        if text_tokenizer_name == "mock"
+        else build_hf_stage1_token_interface(text_tokenizer_name)
+    )
 
     with output_path.open("w", encoding="utf-8") as handle:
         with ThreadPoolExecutor(max_workers=num_workers) as executor:
-            futures = [executor.submit(encode_utterance, item, codec_name) for item in items]
+            futures = [executor.submit(encode_utterance, item, codec_name, text_tokenizer_name) for item in items]
             for future in as_completed(futures):
                 asr_example, tts_example = future.result()
-                handle.write(asr_example.to_json())
+                handle.write(
+                    asr_example.to_json(
+                        special_token_ids=token_interface.special_token_ids,
+                    )
+                )
                 handle.write("\n")
-                handle.write(tts_example.to_json())
+                handle.write(
+                    tts_example.to_json(
+                        special_token_ids=token_interface.special_token_ids,
+                    )
+                )
                 handle.write("\n")
                 example_count += 2
                 completed += 1
@@ -187,6 +223,7 @@ def main() -> None:
         output_path=train_path,
         num_workers=args.num_workers,
         progress_label="train",
+        text_tokenizer_name=args.text_tokenizer,
     )
     val_count = stream_partition(
         val_utterances,
@@ -194,6 +231,7 @@ def main() -> None:
         output_path=val_path,
         num_workers=args.num_workers,
         progress_label="val",
+        text_tokenizer_name=args.text_tokenizer,
     )
 
     print(
@@ -201,6 +239,7 @@ def main() -> None:
             [
                 "stage1_dataset",
                 f"codec={args.codec}",
+                f"text_tokenizer={args.text_tokenizer}",
                 f"input_roots={','.join(str(path) for path in input_roots)}",
                 f"train_examples={train_count}",
                 f"val_examples={val_count}",
