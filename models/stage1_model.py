@@ -13,6 +13,8 @@ from torch import nn
 class Stage1ModelConfig:
     vocab_size: int
     context_length: int
+    backbone: str = "Stage1BootstrapLM"
+    hf_model_name: str = ""
     hidden_size: int = 768
     num_layers: int = 12
     num_heads: int = 12
@@ -76,13 +78,34 @@ class Stage1CausalLM(nn.Module):
     def __init__(self, config: Stage1ModelConfig) -> None:
         super().__init__()
         self.config = config
-        self.token_embed = nn.Embedding(config.vocab_size, config.hidden_size)
-        self.pos_embed = nn.Embedding(config.context_length, config.hidden_size)
-        self.dropout = nn.Dropout(config.dropout)
-        self.blocks = nn.ModuleList([TransformerBlock(config) for _ in range(config.num_layers)])
-        self.ln_f = nn.LayerNorm(config.hidden_size)
-        self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
-        self.lm_head.weight = self.token_embed.weight
+        self.hf_model: nn.Module | None = None
+        if config.backbone == "Stage1BootstrapLM":
+            self.token_embed = nn.Embedding(config.vocab_size, config.hidden_size)
+            self.pos_embed = nn.Embedding(config.context_length, config.hidden_size)
+            self.dropout = nn.Dropout(config.dropout)
+            self.blocks = nn.ModuleList([TransformerBlock(config) for _ in range(config.num_layers)])
+            self.ln_f = nn.LayerNorm(config.hidden_size)
+            self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+            self.lm_head.weight = self.token_embed.weight
+            return
+
+        if config.backbone == "HFCausalLM":
+            if not config.hf_model_name:
+                raise ValueError("hf_model_name must be set when backbone=HFCausalLM")
+            try:
+                from transformers import AutoModelForCausalLM
+            except ImportError as exc:  # pragma: no cover - runtime dependency
+                raise RuntimeError("transformers is required for HFCausalLM backbones.") from exc
+
+            self.hf_model = AutoModelForCausalLM.from_pretrained(config.hf_model_name)
+            hf_vocab_size = int(self.hf_model.get_input_embeddings().num_embeddings)
+            if config.vocab_size > hf_vocab_size:
+                raise ValueError(
+                    f"Configured vocab_size={config.vocab_size} exceeds HF backbone vocab_size={hf_vocab_size}."
+                )
+            return
+
+        raise ValueError(f"Unsupported Stage1 backbone: {config.backbone}")
 
     def forward(
         self,
@@ -90,6 +113,15 @@ class Stage1CausalLM(nn.Module):
         attention_mask: torch.Tensor | None = None,
         labels: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
+        if self.hf_model is not None:
+            outputs = self.hf_model(
+                input_ids=input_ids,
+                attention_mask=attention_mask.long() if attention_mask is not None else None,
+                labels=labels,
+            )
+            loss = outputs.loss if outputs.loss is not None else torch.tensor(0.0, device=input_ids.device)
+            return outputs.logits, loss
+
         batch, steps = input_ids.shape
         positions = torch.arange(steps, device=input_ids.device).unsqueeze(0)
         x = self.token_embed(input_ids) + self.pos_embed(positions)

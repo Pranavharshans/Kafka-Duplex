@@ -43,7 +43,7 @@ fi
 
 "$PYTHON_BIN" -m pip install --upgrade pip
 "$PYTHON_BIN" -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
-"$PYTHON_BIN" -m pip install soundfile tensorboard huggingface_hub
+"$PYTHON_BIN" -m pip install soundfile tensorboard huggingface_hub transformers safetensors
 
 "$PYTHON_BIN" - <<'PY'
 import torch

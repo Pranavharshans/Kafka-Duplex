@@ -49,6 +49,8 @@ def main() -> None:
         " ".join(
             [
                 "stage1_train_config",
+                f"backbone={config['model'].get('backbone', 'Stage1BootstrapLM')}",
+                f"hf_model_name={config['model'].get('hf_model_name', '')}",
                 f"epochs={config['optimization']['epochs']}",
                 f"lr={config['optimization']['learning_rate']}",
                 f"warmup_steps={config['optimization']['warmup_steps']}",

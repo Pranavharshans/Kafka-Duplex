@@ -85,6 +85,8 @@ def run_stage1_training(run_config: Stage1RunConfig) -> None:
     model_config = Stage1ModelConfig(
         vocab_size=int(config["model"]["vocab_size"]),
         context_length=context_length,
+        backbone=str(config["model"].get("backbone", "Stage1BootstrapLM")),
+        hf_model_name=str(config["model"].get("hf_model_name", "")),
         hidden_size=int(config["model"].get("hidden_size", 768)),
         num_layers=int(config["model"].get("num_layers", 12)),
         num_heads=int(config["model"].get("num_heads", 12)),
