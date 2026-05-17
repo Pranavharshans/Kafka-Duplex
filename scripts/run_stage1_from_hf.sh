@@ -91,6 +91,28 @@ print(f"runtime_train_manifest={config['dataset']['train_manifest']}")
 print(f"runtime_val_manifest={config['dataset']['val_manifest']}")
 PY
 
+if [[ "${REMAPPED_DATASET_ROOT:-}" == "" ]]; then
+  REMAPPED_DATASET_ROOT="$("$PYTHON_BIN" - <<'PY'
+import json
+import os
+from pathlib import Path
+
+config_path = Path(os.environ["RUNTIME_CONFIG_PATH"])
+with config_path.open("r", encoding="utf-8") as handle:
+    config = json.load(handle)
+
+text_tokenizer = str(config["dataset"].get("text_tokenizer", "mock"))
+if text_tokenizer == "mock":
+    print("")
+else:
+    run_root = Path(os.environ["RUN_ROOT"]).expanduser().resolve()
+    dataset_root = Path(os.environ["DATASET_ROOT"]).expanduser().resolve()
+    default_root = dataset_root.parent / f"{dataset_root.name}_tokenized"
+    print(str(default_root))
+PY
+)"
+fi
+
 if [[ "${REMAPPED_DATASET_ROOT:-}" != "" ]]; then
   mkdir -p "$REMAPPED_DATASET_ROOT"
   HF_MODEL_NAME="$("$PYTHON_BIN" - <<'PY'
