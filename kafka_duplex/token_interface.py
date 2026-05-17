@@ -21,8 +21,17 @@ class Stage1TokenInterface:
         tokenizer = get_hf_tokenizer(self.text_tokenizer_name)
         return list(tokenizer.encode(text, add_special_tokens=False))
 
+    def decode_text(self, token_ids: list[int]) -> str:
+        if self.text_tokenizer_name == "mock_text_ids_until_real_tokenizer_is_wired":
+            return " ".join(str(token_id) for token_id in token_ids)
+        tokenizer = get_hf_tokenizer(self.text_tokenizer_name)
+        return str(tokenizer.decode(token_ids, skip_special_tokens=True)).strip()
+
     def speech_to_vocab_ids(self, raw_speech_token_ids: list[int]) -> list[int]:
         return [self.speech_vocab_offset + token_id for token_id in raw_speech_token_ids]
+
+    def vocab_to_raw_speech_ids(self, vocab_speech_token_ids: list[int]) -> list[int]:
+        return [token_id - self.speech_vocab_offset for token_id in vocab_speech_token_ids]
 
     def to_metadata(self) -> dict[str, object]:
         return {
